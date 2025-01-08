@@ -5,14 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://live.zwidgets.com/js-sdk/1.2/ZohoEmbededAppSDK.min.js"></script>
   <link rel="stylesheet" type="text/css" href="css/style.css">
-  <title>License Application Widget</title>
 </head>
 <body>
   <!-- Popup Modal -->
   <div class="popup-overlay hidden" id="popup">
     <div class="popup-content">
-      <h3>Action Restricted</h3>
+      <h3 id="popupTitle">Action Status</h3>
       <p id="popupMessage">Default message</p>
+      <!-- <button onclick="hidePopup()">Close</button> -->
     </div>
   </div>
 
