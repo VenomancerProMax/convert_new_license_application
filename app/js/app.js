@@ -37,8 +37,10 @@ function createLicenseRecord(callback) {
       Type: appType,
       License_Remarks: appRemarks,
       New_Resident_Visa_Stage: appStage,
-      Layout: layoutId
+      Layout: layoutId,
+      AML_Connected: true
     },
+    Trigger: ["workflow"] 
   })
     .then((response) => {
       const applicationData = response.data;
