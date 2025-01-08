@@ -65,9 +65,9 @@ function openApplicationUrl(applicationId) {
 
 // Widget onload logic
 ZOHO.embeddedApp.on("PageLoad", (entity) => {
-  let entity_id = entity.EntityId[0];
-
-  ZOHO.CRM.API.getRecord({ Entity: "Applications1", approved: "both", RecordID: entity_id })
+  console.log(entity);
+  let entity_id = entity.EntityId;
+  ZOHO.CRM.API.getRecord({ Entity: "Applications1", approved: "both", RecordID: entity_id, Trigger: ["workflow"]})
     .then((data) => {
       const appData = data.data[0];
       accountId = appData.Account_Name.id;
@@ -94,6 +94,9 @@ ZOHO.embeddedApp.on("PageLoad", (entity) => {
               // Show success message
               const message = "New License Application created successfully!";
               showPopup(message, "success");
+
+              // Close the popup after the record creation is successful
+              ZOHO.CRM.UI.Popup.close();
             });
             console.log("Stage: " + prospectStage);
             console.log("Clearance for DB&C: " + dbClearance);
@@ -106,6 +109,12 @@ ZOHO.embeddedApp.on("PageLoad", (entity) => {
     })
     .catch((error) => console.error("Error fetching record data:", error));
 });
+
+function hidePopup() {
+  // Close the Zoho CRM popup
+  ZOHO.CRM.UI.Popup.close();
+  console.log("CLOSE T F UP");
+}
 
 // Initialize the embedded app
 ZOHO.embeddedApp.init();
