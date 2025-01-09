@@ -38,7 +38,8 @@ function createLicenseRecord(callback) {
       License_Remarks: appRemarks,
       New_Resident_Visa_Stage: appStage,
       Layout: layoutId,
-      AML_Connected: true
+      AML_Connected: true,
+      Stage: "Submitted to Authority"
     },
     Trigger: ["workflow"] 
   })
@@ -66,54 +67,76 @@ function openApplicationUrl(applicationId) {
 // Widget onload logic
 ZOHO.embeddedApp.on("PageLoad", (entity) => {
   console.log(entity);
-  let entity_id = entity.EntityId;
-  ZOHO.CRM.API.getRecord({ Entity: "Applications1", approved: "both", RecordID: entity_id, Trigger: ["workflow"]})
+
+  const entity_id = entity.EntityId;
+
+  ZOHO.CRM.API.getRecord({ Entity: "Applications1", approved: "both", RecordID: entity_id, Trigger: ["workflow"] })
     .then((data) => {
       const appData = data.data[0];
       accountId = appData.Account_Name.id;
-      prospectId = appData.Deal_Name.id;
+      accountName = appData.Account_Name.name;
       licenseJurisdiction = appData.License_Jurisdiction;
 
-      // Fetch Prospect Data
-      ZOHO.CRM.API.getRecord({ Entity: "Deals", RecordID: prospectId })
-        .then((data) => {
-          const prospectData = data.data[0];
-          prospectStage = prospectData.Stage;
-          dbClearance = prospectData.Clearance_for_Dashboard_Commission;
-          processClearance = prospectData.Clearance_for_Processing;
+      // Search deals to find the prospect with "New Trade License" type
+      ZOHO.CRM.API.searchRecord({ Entity: "Deals", Type: "word", Query: accountName, page: 1, per_page: 200 })
+        .then((response) => {
+          const records = response.data;
 
-          // Check criteria
-          if (prospectStage === "Closed Won" && dbClearance === true && processClearance === true) {
-            // Pass the callback function to createLicenseRecord
-            createLicenseRecord((applicationId) => {
-              console.log("New License Application created with ID:", applicationId);
+          // Find prospectId from matching records
+          const matchingRecord = records.find((record) => record.Type === "New Trade License");
+          if (matchingRecord) {
+            console.log("PROSPECT ID:", matchingRecord.id);
+            prospectId = matchingRecord.id;
 
-              // Now open the application URL
-              openApplicationUrl(applicationId);
+            // Fetch Prospect Data
+            ZOHO.CRM.API.getRecord({ Entity: "Deals", RecordID: prospectId })
+              .then((data) => {
+                const prospectData = data.data[0];
+                prospectStage = prospectData.Stage;
+                dbClearance = prospectData.Clearance_for_Dashboard_Commission;
+                processClearance = prospectData.Clearance_for_Processing;
 
-              // Show success message
-              const message = "New License Application created successfully!";
-              showPopup(message, "success");
+                console.log(prospectStage);
+                console.log(dbClearance);
+                console.log(processClearance);
 
-              // Close the popup after the record creation is successful
-              ZOHO.CRM.UI.Popup.close();
-            });
-            console.log("Stage: " + prospectStage);
-            console.log("Clearance for DB&C: " + dbClearance);
-            console.log("Clearance for Process: " + processClearance);
+                // Check criteria
+                if (prospectStage === "Closed Won" && dbClearance === true && processClearance === true) {
+                  // Create license record
+                  createLicenseRecord((applicationId) => {
+                    console.log("New License Application created with ID:", applicationId);
+
+                    // Open the application URL
+                    openApplicationUrl(applicationId);
+
+                    // Show success message
+                    const message = "New License Application created successfully!";
+                    showPopup(message, "success");
+                  });
+                } else {
+                  const message = "Note that there are no existing new trade license prospect that is closed won and clearance by finance. Please inform the BSC.";
+                  showPopup(message);
+                }
+              });
           } else {
-            const message = "Cannot convert record. Ensure the Prospect is Closed Won and has Finance Clearance. Close the pop-up to exit";
-            showPopup(message);
+            console.log("No matching 'New Trade License' prospect found.");
+            showPopup("No matching 'New Trade License' prospect found.");
           }
-        });
+        })
+        .catch((error) => console.error("Error searching deals:", error));
     })
-    .catch((error) => console.error("Error fetching record data:", error));
+    .catch((error) => console.error("Error fetching application record:", error));
 });
 
+
+
 function hidePopup() {
-  // Close the Zoho CRM popup
+  if(prospectStage === "Closed Won" && dbClearance === true && processClearance === true)
+  {
+    // BLUEPRINT Proceeds to next stage
+    ZOHO.CRM.BLUEPRINT.proceed();
+  }
   ZOHO.CRM.UI.Popup.close();
-  console.log("CLOSE T F UP");
 }
 
 // Initialize the embedded app
