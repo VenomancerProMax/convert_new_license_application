@@ -25,7 +25,7 @@ function showPopup(message, type = "restricted") {
 function createLicenseRecord(callback) {
   appType = "New Trade License";
   appRemarks = "Continued from security approval to new trade License";
-  appStage = "License is Issued - Upload Documents";
+  appStage = "Submitted to Authority";
   layoutId = "3769920000104212264";
 
   ZOHO.CRM.API.insertRecord({
