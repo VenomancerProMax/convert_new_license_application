@@ -39,7 +39,8 @@ function createLicenseRecord(callback) {
       New_Resident_Visa_Stage: appStage,
       Layout: layoutId,
       AML_Connected: true,
-      Stage: "Submitted to Authority"
+      Stage: "Submitted to Authority",
+      Status: "Submitted"
     },
     Trigger: ["workflow"] 
   })
