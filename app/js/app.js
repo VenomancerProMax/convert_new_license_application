@@ -1,32 +1,53 @@
 let prospectId, accountId, prospectStage, dbClearance, processClearance, licenseJurisdiction, applicationId;
 
-// Function to display a popup with a custom message
-function showPopup(message, type = "restricted") {
-  const popup = document.getElementById("popup");
-  const popupMessage = document.getElementById("popupMessage");
-  const popupTitle = document.getElementById("popupTitle");
+function showPopup(type, title, message) {
+  const modal = document.getElementById("custom-modal");
+  const iconSuccess = document.getElementById("modal-icon-success");
+  const iconError = document.getElementById("modal-icon-error");
+  const modalBtn = document.getElementById("modal-close");
+  
+  document.getElementById("modal-title").textContent = title;
+  document.getElementById("modal-message").textContent = message;
+  
+  modalBtn.onclick = closeModal;
 
-  popupMessage.textContent = message;
-
-  if (type === "success") {
-    popup.classList.add("success");
-    popup.classList.remove("restricted");
-    popupTitle.textContent = "Success!";
-  } else {
-    popup.classList.add("restricted");
-    popup.classList.remove("success");
-    popupTitle.textContent = "Action Restricted";
+  if (type === "success") { 
+    iconSuccess.classList.remove("hidden"); 
+    iconError.classList.add("hidden");
+    
+    modalBtn.onclick = async () => {
+      modalBtn.disabled = true;
+      modalBtn.textContent = "Finalizing...";
+      try {
+        await ZOHO.CRM.BLUEPRINT.proceed();
+        setTimeout(() => {
+          window.top.location.href = window.top.location.href;
+        }, 800);
+      } catch (e) {
+        ZOHO.CRM.UI.Popup.closeReload();
+      }
+    };
+  } else { 
+    iconSuccess.classList.add("hidden"); 
+    iconError.classList.remove("hidden"); 
+    modalBtn.onclick = () => ZOHO.CRM.UI.Popup.close();
   }
-
-  popup.classList.remove("hidden");
+  
+  modal.classList.remove("hidden");
+  modal.classList.add("flex");
 }
 
-// Function to create a new license record
+function closeModal() {
+  const modal = document.getElementById("custom-modal");
+  modal.classList.add("hidden");
+  modal.classList.remove("flex");
+}
+
 function createLicenseRecord(callback) {
-  appType = "New Trade License";
-  appRemarks = "Continued from security approval to new trade License";
-  appStage = "Submitted to Authority";
-  layoutId = "3769920000104212264";
+  const appType = "New Trade License";
+  const appRemarks = "Continued from security approval to new trade License";
+  const appStage = "Submitted to Authority";
+  const layoutId = "3769920000104212264";
 
   ZOHO.CRM.API.insertRecord({
     Entity: "Applications1",
@@ -44,101 +65,61 @@ function createLicenseRecord(callback) {
     },
     Trigger: ["workflow"] 
   })
-    .then((response) => {
-      const applicationData = response.data;
-      applicationData.map((record) => {
-        applicationId = record.details.id;
-        console.log("Record created successfully:", applicationId);
-        
-        // Call the callback with the applicationId once the record is created
-        callback(applicationId);
-      });
-    })
-    .catch((error) => {
-      console.error("Error creating record:", error);
-    });
+  .then((response) => {
+    if (response.data && response.data.length > 0) {
+      applicationId = response.data[0].details.id;
+      callback(applicationId);
+    }
+  })
+  .catch((error) => console.error(error));
 }
 
-// Function to open the application URL in a new tab
-function openApplicationUrl(applicationId) {
-  const application_url = "https://crm.zoho.com/crm/org682300086/tab/CustomModule3/" + applicationId;
-  window.open(application_url, '_blank').focus();
+function openApplicationUrl(id) {
+  const url = "https://crm.zoho.com/crm/org682300086/tab/CustomModule3/" + id;
+  window.open(url, '_blank').focus();
 }
 
-// Widget onload logic
 ZOHO.embeddedApp.on("PageLoad", (entity) => {
-  console.log(entity);
-
-  const entity_id = entity.EntityId;
-
-  ZOHO.CRM.API.getRecord({ Entity: "Applications1", approved: "both", RecordID: entity_id, Trigger: ["workflow"] })
+  ZOHO.CRM.API.getRecord({ Entity: "Applications1", approved: "both", RecordID: entity.EntityId, Trigger: ["workflow"] })
     .then((data) => {
       const appData = data.data[0];
       accountId = appData.Account_Name.id;
-      accountName = appData.Account_Name.name;
+      const accountName = appData.Account_Name.name;
       licenseJurisdiction = appData.License_Jurisdiction;
 
-      // Search deals to find the prospect with "New Trade License" type
       ZOHO.CRM.API.searchRecord({ Entity: "Deals", Type: "word", Query: accountName, page: 1, per_page: 200 })
         .then((response) => {
-          const records = response.data;
+          if (!response.data) {
+            showPopup("error", "Not Found", "No matching prospect found.");
+            return;
+          }
 
-          // Find prospectId from matching records
-          const matchingRecord = records.find((record) => record.Type === "New Trade License");
+          const matchingRecord = response.data.find((record) => record.Type === "New Trade License");
           if (matchingRecord) {
-            console.log("PROSPECT ID:", matchingRecord.id);
             prospectId = matchingRecord.id;
 
-            // Fetch Prospect Data
             ZOHO.CRM.API.getRecord({ Entity: "Deals", RecordID: prospectId })
               .then((data) => {
-                const prospectData = data.data[0];
-                prospectStage = prospectData.Stage;
-                dbClearance = prospectData.Clearance_for_Dashboard_Commission;
-                processClearance = prospectData.Clearance_for_Processing;
+                const pData = data.data[0];
+                prospectStage = pData.Stage;
+                dbClearance = pData.Clearance_for_Dashboard_Commission;
+                processClearance = pData.Clearance_for_Processing;
 
-                console.log(prospectStage);
-                console.log(dbClearance);
-                console.log(processClearance);
-
-                // Check criteria
                 if (prospectStage === "Closed Won" && dbClearance === true && processClearance === true) {
-                  // Create license record
-                  createLicenseRecord((applicationId) => {
-                    console.log("New License Application created with ID:", applicationId);
-
-                    // Open the application URL
-                    openApplicationUrl(applicationId);
-
-                    // Show success message
-                    const message = "New License Application created successfully!";
-                    showPopup(message, "success");
+                  createLicenseRecord((newId) => {
+                    openApplicationUrl(newId);
+                    showPopup("success", "Success!", "Application created successfully. Click OK to proceed.");
                   });
                 } else {
-                  const message = "Note that there are no existing new trade license prospect that is closed won and clearance by finance. Please inform the BSC.";
-                  showPopup(message);
+                  showPopup("error", "Restricted", "Note that there are no existing new trade license prospect that is closed won and clearance by finance.");
                 }
               });
           } else {
-            console.log("No matching 'New Trade License' prospect found.");
-            showPopup("No matching 'New Trade License' prospect found.");
+            showPopup("error", "Restricted", "No matching 'New Trade License' prospect found.");
           }
-        })
-        .catch((error) => console.error("Error searching deals:", error));
+        });
     })
-    .catch((error) => console.error("Error fetching application record:", error));
+    .catch((error) => console.error(error));
 });
 
-
-
-function hidePopup() {
-  if(prospectStage === "Closed Won" && dbClearance === true && processClearance === true)
-  {
-    // BLUEPRINT Proceeds to next stage
-    ZOHO.CRM.BLUEPRINT.proceed();
-  }
-  ZOHO.CRM.UI.Popup.close();
-}
-
-// Initialize the embedded app
 ZOHO.embeddedApp.init();
