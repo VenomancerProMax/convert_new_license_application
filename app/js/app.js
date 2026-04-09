@@ -1,6 +1,6 @@
 let prospectId, accountId, prospectStage, dbClearance, processClearance, licenseJurisdiction, applicationId;
 
-function showPopup(type, title, message) {
+function showStatusModal(title, message, isError = false) {
   const modal = document.getElementById("custom-modal");
   const iconSuccess = document.getElementById("modal-icon-success");
   const iconError = document.getElementById("modal-icon-error");
@@ -8,39 +8,20 @@ function showPopup(type, title, message) {
   
   document.getElementById("modal-title").textContent = title;
   document.getElementById("modal-message").textContent = message;
-  
-  modalBtn.onclick = closeModal;
 
-  if (type === "success") { 
-    iconSuccess.classList.remove("hidden"); 
-    iconError.classList.add("hidden");
-    
-    modalBtn.onclick = async () => {
-      modalBtn.disabled = true;
-      modalBtn.textContent = "Finalizing...";
-      try {
-        await ZOHO.CRM.BLUEPRINT.proceed();
-        setTimeout(() => {
-          window.top.location.href = window.top.location.href;
-        }, 800);
-      } catch (e) {
-        ZOHO.CRM.UI.Popup.closeReload();
-      }
-    };
-  } else { 
-    iconSuccess.classList.add("hidden"); 
-    iconError.classList.remove("hidden"); 
+  if (isError) {
+    iconSuccess.classList.add("hidden");
+    iconError.classList.remove("hidden");
+    modalBtn.classList.remove("hidden");
     modalBtn.onclick = () => ZOHO.CRM.UI.Popup.close();
+  } else {
+    iconSuccess.classList.remove("hidden");
+    iconError.classList.add("hidden");
+    modalBtn.classList.add("hidden");
   }
   
   modal.classList.remove("hidden");
   modal.classList.add("flex");
-}
-
-function closeModal() {
-  const modal = document.getElementById("custom-modal");
-  modal.classList.add("hidden");
-  modal.classList.remove("flex");
 }
 
 function createLicenseRecord(callback) {
@@ -71,12 +52,28 @@ function createLicenseRecord(callback) {
       callback(applicationId);
     }
   })
-  .catch((error) => console.error(error));
+  .catch((err) => {
+    showStatusModal("Error", "Failed to create record.", true);
+  });
 }
 
 function openApplicationUrl(id) {
   const url = "https://crm.zoho.com/crm/org682300086/tab/CustomModule3/" + id;
   window.open(url, '_blank').focus();
+}
+
+async function handleInstantTransition(newId) {
+  openApplicationUrl(newId);
+  showStatusModal("Success", "Record created. Closing...");
+
+  try {
+    await ZOHO.CRM.BLUEPRINT.proceed();
+    setTimeout(() => {
+      ZOHO.CRM.UI.Popup.closeReload();
+    }, 1000);
+  } catch (e) {
+    ZOHO.CRM.UI.Popup.closeReload();
+  }
 }
 
 ZOHO.embeddedApp.on("PageLoad", (entity) => {
@@ -89,8 +86,8 @@ ZOHO.embeddedApp.on("PageLoad", (entity) => {
 
       ZOHO.CRM.API.searchRecord({ Entity: "Deals", Type: "word", Query: accountName, page: 1, per_page: 200 })
         .then((response) => {
-          if (!response.data) {
-            showPopup("error", "Not Found", "No matching prospect found.");
+          if (!response || !response.data) {
+            showStatusModal("Not Found", "No matching prospect found.", true);
             return;
           }
 
@@ -107,15 +104,14 @@ ZOHO.embeddedApp.on("PageLoad", (entity) => {
 
                 if (prospectStage === "Closed Won" && dbClearance === true && processClearance === true) {
                   createLicenseRecord((newId) => {
-                    openApplicationUrl(newId);
-                    showPopup("success", "Success!", "Application created successfully. Click OK to proceed.");
+                    handleInstantTransition(newId);
                   });
                 } else {
-                  showPopup("error", "Restricted", "Note that there are no existing new trade license prospect that is closed won and clearance by finance.");
+                  showStatusModal("Restricted", "Prospect must be Closed Won with finance clearance.", true);
                 }
               });
           } else {
-            showPopup("error", "Restricted", "No matching 'New Trade License' prospect found.");
+            showStatusModal("Restricted", "No matching 'New Trade License' prospect found.", true);
           }
         });
     })
